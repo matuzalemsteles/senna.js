@@ -149,6 +149,15 @@ class App extends EventEmitter {
 		this.isNavigationPending = false;
 
 		/**
+		 * When set to true means that the navigation happened
+		 * outside Senna.js.
+		 * @type {!boolean}
+		 * @default false
+		 * @protected
+		 */
+		this.originActive = false;
+
+		/**
 		 * Holds a deferred with the current navigation.
 		 * @type {?CancellablePromise}
 		 * @default null
@@ -1008,7 +1017,7 @@ class App extends EventEmitter {
 			return;
 		}
 
-		var state = event.state;
+		let state = event.state;
 
 		if (!state) {
 			if (globals.window.location.hash) {
@@ -1028,7 +1037,14 @@ class App extends EventEmitter {
 			return;
 		}
 
-		if (state.senna) {
+		// Supports the route libraries that manipulate the state
+		// within the state object. Like the React Router.
+		state = state.state ? state.state : state;
+
+		// Senna.js should return to the previous page even when the
+		// navigation came with origin and the current route is
+		// being navigated by Senna.js.
+		if (state.senna || (state.origin && !this.originActive)) {
 			console.log('History navigation to [' + state.path + ']');
 			this.popstateScrollTop = state.scrollTop;
 			this.popstateScrollLeft = state.scrollLeft;
@@ -1142,9 +1158,11 @@ class App extends EventEmitter {
 			historyState.scrollTop = this.popstateScrollTop;
 			historyState.scrollLeft = this.popstateScrollLeft;
 		}
+		this.originActive = false;
 		const hash = new Uri(path).getHash();
 		redirectPath = this.maybeRestoreRedirectPathHash_(path, redirectPath, hash);
 		this.updateHistory_(title, redirectPath, nextScreen.beforeUpdateHistoryState(historyState), opt_replaceHistory);
+		this.updateTitle_(title);
 		this.redirectPath = redirectPath;
 	}
 
@@ -1270,6 +1288,14 @@ class App extends EventEmitter {
 	}
 
 	/**
+	 * Sets the origin active
+	 * @param {!boolean} originActive 
+	 */
+	setOriginActive(originActive) {
+		this.originActive = originActive;
+	}
+
+	/**
 	 * Sets the update scroll position value.
 	 * @param {boolean} updateScrollPosition
 	 */
@@ -1314,7 +1340,7 @@ class App extends EventEmitter {
 	}
 
 	/**
-	 * Updates or replace browser history.
+	 * Replace browser history.
 	 * @param {?string} title Document title.
 	 * @param {!string} path Path containing the querystring part.
 	 * @param {!object} state
@@ -1335,7 +1361,14 @@ class App extends EventEmitter {
 		}
 
 		utils.setReferrer(referrer);
+	}
 
+	/**
+	 * Update the document title.
+	 * @param {!string} title Document title
+	 * @protected
+	 */
+	updateTitle_(title) {
 		let titleNode = globals.document.querySelector('title');
 		if (titleNode) {
 			titleNode.innerHTML = title;
